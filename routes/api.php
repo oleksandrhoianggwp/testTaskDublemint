@@ -11,4 +11,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::post('/logout', [AuthController::class, 'logout']);
     Route::post('/promo/claim', [PromoController::class, 'claim'])->middleware('throttle:promo-claim');
     Route::get('/promo/history', [PromoController::class, 'history']);
+    Route::patch('/promo/{claimId}/revoke', [PromoController::class, 'revoke'])
+        ->whereNumber('claimId')
+        ->middleware('throttle:promo-mutation');
 });

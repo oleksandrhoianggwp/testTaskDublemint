@@ -3,15 +3,30 @@
 namespace App\Http\Controllers;
 
 use App\Actions\Promo\ClaimPromoAction;
+use App\Actions\Promo\RevokePromoAction;
 use App\Http\Requests\ClaimPromoRequest;
 use App\Http\Requests\PromoHistoryRequest;
 use App\Http\Resources\PromoClaimResource;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PromoController extends Controller
 {
+    public function revoke(Request $request, int $claimId, RevokePromoAction $action): JsonResponse
+    {
+        $claim = $action->execute($request->user()->id, $claimId);
+        $user = $request->user()->fresh();
+
+        return response()->json([
+            'message' => 'Promo bonus revoked successfully.',
+            'balance' => Money::format($user->balance_minor),
+            'deducted_amount' => Money::format($claim->bonus_amount_minor),
+            'claim' => new PromoClaimResource($claim),
+        ]);
+    }
+
     public function history(PromoHistoryRequest $request): AnonymousResourceCollection
     {
         $claims = $request->user()->promoClaims()
