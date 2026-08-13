@@ -87,7 +87,10 @@ function initials(name) {
       </div>
 
       <div class="mt-5">
-        <PromoHistory ref="history" />
+        <PromoHistory
+          ref="history"
+          @balance-changed="emit('balance-changed', $event)"
+        />
       </div>
     </div>
   </main>

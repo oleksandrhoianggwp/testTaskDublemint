@@ -16,4 +16,9 @@ export const promoApi = {
     });
     return response.data;
   },
+
+  async revoke(claimId) {
+    const response = await api.patch(`/promo/${claimId}/revoke`);
+    return response.data;
+  },
 };

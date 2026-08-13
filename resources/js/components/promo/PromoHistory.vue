@@ -10,6 +10,7 @@ import {
   RotateCcw,
   XCircle,
 } from 'lucide-vue-next';
+import ConfirmRevokeModal from './ConfirmRevokeModal.vue';
 import { getApiError } from '../../services/api';
 import { promoApi } from '../../services/promoApi';
 
@@ -25,6 +26,11 @@ const activeFilter = ref('');
 const page = ref(1);
 const loading = ref(true);
 const errorMessage = ref('');
+const actionMessage = ref('');
+const selectedClaim = ref(null);
+const revoking = ref(false);
+const revokeError = ref('');
+const emit = defineEmits(['balance-changed']);
 
 const statusDetails = {
   applied: { label: 'Applied', icon: CheckCircle2, classes: 'bg-emerald-400/10 text-emerald-300 ring-emerald-400/20' },
@@ -70,6 +76,34 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function openRevoke(claim) {
+  selectedClaim.value = claim;
+  revokeError.value = '';
+}
+
+function closeRevoke() {
+  if (!revoking.value) selectedClaim.value = null;
+}
+
+async function confirmRevoke() {
+  if (!selectedClaim.value || revoking.value) return;
+
+  revoking.value = true;
+  revokeError.value = '';
+
+  try {
+    const result = await promoApi.revoke(selectedClaim.value.id);
+    items.value = items.value.map((item) => (item.id === result.claim.id ? result.claim : item));
+    actionMessage.value = `${result.deducted_amount} USD was deducted. ${result.claim.code} is now revoked.`;
+    emit('balance-changed', result.balance);
+    selectedClaim.value = null;
+  } catch (error) {
+    revokeError.value = getApiError(error, 'The bonus could not be revoked.');
+  } finally {
+    revoking.value = false;
+  }
+}
+
 watch([activeFilter, page], loadHistory);
 onMounted(loadHistory);
 defineExpose({ refresh: loadHistory });
@@ -112,6 +146,25 @@ defineExpose({ refresh: loadHistory });
         </button>
       </div>
     </header>
+
+    <div
+      v-if="actionMessage"
+      role="status"
+      class="mx-5 mt-5 flex items-start justify-between gap-4 rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-200 sm:mx-6"
+    >
+      <span class="flex items-start gap-2"><CheckCircle2
+        :size="17"
+        class="mt-0.5 shrink-0"
+      /> {{ actionMessage }}</span>
+      <button
+        type="button"
+        aria-label="Dismiss message"
+        class="text-emerald-300/60 hover:text-emerald-100"
+        @click="actionMessage = ''"
+      >
+        ×
+      </button>
+    </div>
 
     <div
       v-if="loading"
@@ -178,6 +231,9 @@ defineExpose({ refresh: loadHistory });
               <th class="px-6 py-4">
                 Details
               </th>
+              <th class="px-6 py-4 text-right">
+                Action
+              </th>
             </tr>
           </thead>
           <tbody class="divide-y divide-white/[0.07]">
@@ -206,6 +262,20 @@ defineExpose({ refresh: loadHistory });
               </td>
               <td class="max-w-xs px-6 py-4 text-xs leading-5 text-slate-500">
                 {{ item.rejection_reason || 'Balance updated successfully.' }}
+              </td>
+              <td class="px-6 py-4 text-right">
+                <button
+                  v-if="item.can_revoke"
+                  type="button"
+                  class="rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-1.5 text-xs font-semibold text-amber-300 transition hover:border-amber-300/40 hover:bg-amber-300/10 focus:outline-none focus:ring-2 focus:ring-amber-300/20"
+                  @click="openRevoke(item)"
+                >
+                  Revoke
+                </button>
+                <span
+                  v-else
+                  class="text-slate-700"
+                >—</span>
               </td>
             </tr>
           </tbody>
@@ -243,6 +313,14 @@ defineExpose({ refresh: loadHistory });
               {{ item.amount ? `$${item.amount}` : '—' }}
             </p>
           </div>
+          <button
+            v-if="item.can_revoke"
+            type="button"
+            class="mt-4 w-full rounded-lg border border-amber-300/20 bg-amber-300/5 px-3 py-2 text-xs font-semibold text-amber-300 transition hover:bg-amber-300/10"
+            @click="openRevoke(item)"
+          >
+            Revoke bonus
+          </button>
         </article>
       </div>
 
@@ -272,5 +350,14 @@ defineExpose({ refresh: loadHistory });
         </div>
       </footer>
     </template>
+
+    <ConfirmRevokeModal
+      :open="Boolean(selectedClaim)"
+      :claim="selectedClaim"
+      :loading="revoking"
+      :error="revokeError"
+      @close="closeRevoke"
+      @confirm="confirmRevoke"
+    />
   </section>
 </template>
