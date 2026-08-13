@@ -1,161 +1,288 @@
-# AI Prompt Log
+# AI-Assisted Development Log
 
-This project was developed with Codex from **one comprehensive master prompt** supplied by the user. The implementation phases below describe autonomous planning, implementation, review and correction performed under that prompt; they are not presented as separate prompts that the user did not send.
+## Prompting strategy
 
-## 1. Initial master prompt
+I started the project with one comprehensive master prompt for Codex. I deliberately structured that prompt as an engineering workflow rather than asking the AI to generate the whole application in one unreviewed pass.
 
-### User instruction
+The master prompt defined the product requirements, technical constraints, financial invariants, implementation order, verification gates and final deliverables. This let me use the AI as an implementation assistant while keeping the important architectural and security decisions explicit from the beginning.
 
-The master prompt asked Codex to complete the technical assignment end-to-end in `testTaskDublemint`: inspect the environment, build a production-minded Laravel/Vue application, use PostgreSQL and Docker, authenticate with Sanctum, implement promo claim/history/revoke, protect financial invariants and ownership, create a polished responsive UI, test it, write the Part 2 review and AI log, document a clean-clone workflow, create real incremental Git history and push it to GitHub.
+The steps below are a decomposition of that original master prompt. The quoted instruction blocks are condensed from the master prompt; they are not presented as separate messages that were never sent.
 
-It explicitly prioritized exact money, transactionality, row locks, duplicate prevention, database constraints, auditability and IDOR protection. It also required truthful tool/test reporting and prohibited a single artificial final commit.
+## Step 1 — Inspect the repository and development environment
 
-### Resulting approach
+### Instruction block from the master prompt
 
-- Laravel conventions with Form Requests, API Resources, thin controllers and focused claim/revoke actions.
-- Vue 3 Composition API, axios service modules, Tailwind CSS and accessible custom UI states.
-- PostgreSQL integer minor units and database constraints rather than floating-point wallet storage.
-- Docker Compose services for PHP-FPM, Nginx, PostgreSQL and Vite.
-- Feature tests against PostgreSQL, plus lint, production build, formatter and live browser verification.
+> Inspect the current directory, Git status and configured remotes. Determine whether Laravel already exists, preserve useful work, and create a concise implementation plan before modifying files.
 
-## 2. Bootstrap and environment phase
+### Why I used this step
 
-### Objective inherited from the master prompt
+I wanted the AI to establish the real starting state instead of assuming an empty repository or overwriting existing work. This is especially important when an AI tool has filesystem and Git access: environment discovery must happen before code generation.
 
-Create a cloneable project without overwriting useful repository state, and provide a Docker-first developer experience.
+### Result
 
-### Decisions and work
+- Confirmed the repository state and target remote.
+- Identified that the application needed to be bootstrapped.
+- Checked the available Docker environment and occupied host ports.
+- Created an incremental implementation order covering bootstrap, Ticket 1, Ticket 2, frontend, tests and documentation.
 
-- Bootstrapped Laravel 13 and Vue 3/Vite in the existing repository.
-- Added separate `app`, `nginx`, `postgres` and `node` services.
-- Configured the application on `http://localhost:8090` because port 8080 was already occupied locally.
-- Added safe Docker `.env.example` defaults, PostgreSQL health checking and a dedicated PostgreSQL test database.
-- Kept `.env`, `vendor` and `node_modules` outside Git.
+## Step 2 — Define architecture and financial safety constraints
 
-### Verification/corrections
+### Instruction block from the master prompt
 
-- Verified container health and the Laravel `/up` endpoint.
-- Added Docker context exclusions after identifying unnecessary OneDrive/scaffold content entering builds.
-- Normalized the PHP entrypoint for cross-platform line endings and writable Laravel runtime directories.
+> Use Laravel, Vue 3, axios, PostgreSQL, Docker and Sanctum. Keep controllers thin and business logic in focused actions. Store money as integer minor units. Protect wallet operations with transactions, row locks and database invariants. Do not accept player identity or bonus amounts from the client.
 
-## 3. Ticket 1 — promo claim and history
+### Why I used this step
 
-### Objective inherited from the master prompt
+The domain involves player balances, so a functionally correct UI was not enough. I included the financial and authorization constraints before implementation to prevent the AI from choosing convenient but unsafe defaults such as floats, client-controlled amounts or an unprotected read-modify-write balance update.
 
-Implement authenticated promo claiming and paginated, filterable per-player history with explicit validation and business errors.
+I also intentionally limited abstraction: this is a small technical assignment, so normal Laravel conventions were preferable to adding repositories, interfaces or DTO layers without a concrete benefit.
 
-### Decisions and work
+### Result
 
-- Added Sanctum token login, current-user and logout endpoints with a seeded demo account.
-- Added promo code and claim models, status enum, Form Requests and API Resources.
-- Normalized submitted codes to uppercase and validated 6–12 ASCII letters/digits.
-- Stored wallet and bonus values as integer minor units (`BIGINT`) and formatted them at the API boundary.
-- Implemented `ClaimPromoAction` with a transaction, player row lock, server-side promo amount, eligibility checks and atomic claim/balance writes.
-- Recorded valid-format business rejections (`not found`, `expired`, `inactive`, `already used`) without changing the wallet.
-- Added a PostgreSQL partial unique index so applied **and revoked** claims consume a promo, while rejected attempts do not.
-- Implemented newest-first history scoped to the authenticated user with status validation, pagination and bounded `per_page`.
+- Selected integer `BIGINT` minor units for balances and bonus amounts.
+- Used `ClaimPromoAction` and `RevokePromoAction` for transactional domain behavior.
+- Used Form Requests, API Resources, Eloquent models and a domain exception.
+- Defined a consistent wallet lock order to reduce concurrency risk.
+- Added database constraints for non-negative balances and positive promo amounts.
 
-### Verification/corrections
+## Step 3 — Establish a reviewable Git workflow
 
-- Added tests for authentication, format validation, each business failure, exact credit, persisted claims, duplicate attempts, cross-player isolation and database invariants.
-- Converted uniqueness conflicts into a stable `PROMO_ALREADY_USED` domain response instead of exposing SQL details.
-- Confirmed rejected attempts leave balances unchanged and that a revoked promo cannot become reusable.
+### Instruction block from the master prompt
 
-## 4. Ticket 2 — bonus revoke
+> Create real incremental commits that correspond to actual implementation milestones. Inspect changes before commits, do not commit secrets or generated dependencies, do not squash the history, and push the result to the configured repository.
 
-### Objective inherited from the master prompt
+### Why I used this step
 
-Revoke a previously applied claim exactly once, only for its owner, subtract the original bonus safely and reject insufficient balances.
+The assignment explicitly evaluates AI-assisted development. A single generated commit would hide how the solution evolved and make review harder. I wanted the history to show clear boundaries between scaffolding, domain implementation, API behavior, tests, UI work and documentation.
 
-### Decisions and work
+During execution I reinforced this by publishing task-oriented branch pointers as well as step-oriented commits.
 
-- Implemented `PATCH /api/promo/{claimId}/revoke` through `RevokePromoAction`.
-- Scoped claim lookup to the authenticated user to prevent IDOR.
-- Used the same lock order as claim operations: lock player first, then claim.
-- Required `applied` status, preserved the original amount, set `revoked_at` and updated balance/status in one transaction.
-- Returned `409` for already-revoked/non-revocable claims and insufficient wallet balance, with no mutation on failure.
+### Result
 
-### Verification/corrections
-
-- Added tests for the successful amount/status/timestamp update, duplicate revoke, rejected-claim revoke, cross-player access and insufficient balance.
-- Added database protection for non-negative balances and positive promo amounts.
-- Confirmed a second revoke cannot debit the wallet again.
-
-## 5. Frontend and design pass
-
-### Objective inherited from the master prompt
-
-Build an intentional betting/fintech-style Vue interface with complete interaction states and live balance/history updates.
-
-### Decisions and work
-
-- Created a responsive dark dashboard with login, player identity, prominent balance, claim form, history filters, status badges and pagination.
-- Centralized Bearer-token attachment and `401` handling in the axios service.
-- Added client validation, disabled/loading states and backend error messages.
-- Added an accessible confirmation modal with the exact promo and deduction amount.
-- Updated balance and claim status without a page reload after claim/revoke.
-
-### Browser verification and corrections
-
-- Exercised login, invalid format, expired promo, valid claim, modal confirmation and revoke in the running application.
-- Checked desktop and a 390 px mobile viewport; the document had no horizontal overflow.
-- Improved responsive table detail visibility and mobile record descriptions.
-- Cleared stale claim-success feedback after a later revoke changed the balance.
-- Removed a production font optimization warning and added consistent base rendering styles.
-- Captured only running-application states in `docs/screenshots/`.
-
-## 6. Additional user iterations
-
-These are the separate follow-up prompts actually sent during development.
-
-### Iteration 1 — commit granularity
-
-> важливе уточнення. Кожен коміт під таску. АБо під самий step. Будь ласка не забувай про це, так як завдання не буде прийняте
-
-**Response in the work:** implementation was split into real bootstrap, domain, API, test, UI, polish and documentation commits. Relevant checks were run before milestone commits; commits were not squashed.
-
-### Iteration 2 — visible GitHub progress
-
-> я щось не бачу поки ні одного коміта. Ти впевнений, що ти їх робиш? Дай будь ласка репо на яке ти пушеш
-
-**Problem found:** local commits existed, but the HTTPS push had been interrupted by a credential prompt, so GitHub was still empty.
-
-**Correction:** SSH authentication was verified, `origin` was switched to `git@github.com:oleksandrhoianggwp/testTaskDublemint.git`, the existing commits were pushed, and every later milestone was pushed immediately. Repository: <https://github.com/oleksandrhoianggwp/testTaskDublemint>.
-
-### Iteration 3 — task branches
-
-> а різні бренчі під різні задачі не вчили розхставляти?))) Будь ласка і над цим задумайся
-
-**Response in the work:** task boundaries were published as `chore/bootstrap`, `feat/ticket-1-api`, `feat/ticket-2-api`, `feat/ticket-1-ui`, `feat/ticket-2-ui` and `chore/final-polish-docs`. The branch pointers preserve reviewable milestones while `main` receives the final tested linear history by fast-forward.
-
-## 7. Security and quality review
-
-### Review focus inherited from the master prompt
-
-IDOR, missing auth, client-controlled money, float arithmetic, negative amounts, duplicate claim/revoke, transaction/lock gaps, uniqueness races, cross-user history, pagination abuse, token handling, SQL leakage and committed secrets.
-
-### Findings/corrections
-
-- No promo endpoint accepts a player/user ID or bonus amount from the client.
-- All promo routes require Sanctum; resources expose only the authenticated player's records.
-- Wallet writes use exact integers inside transactions and database row locks.
-- Duplicate consumption is guarded by both application checks and a PostgreSQL invariant.
-- Expected business conflicts use stable public codes/messages; raw database errors are not returned.
-- `per_page` is bounded, login/promo operations are rate-limited, and frontend tokens are cleared on `401`.
-- The demo stores its Bearer token in local storage as a documented test-application trade-off; production deployment should prefer an HttpOnly first-party session/cookie model with a full XSS/CSRF threat review.
-- `.env` remained ignored and no plaintext API token or application secret was committed.
-
-## 8. Verification performed
-
-The following checks were actually run during implementation:
+Published branches:
 
 ```text
-php artisan test             42 passed, 145 assertions (PostgreSQL)
-npm run lint                 passed
-npm run build                passed
-vendor/bin/pint --test       passed
-browser flow                 login, claim errors, successful claim, filters, modal and revoke verified
-responsive browser check     390 px viewport, no document overflow
+chore/bootstrap
+feat/ticket-1-api
+feat/ticket-2-api
+feat/ticket-1-ui
+feat/ticket-2-ui
+chore/final-polish-docs
 ```
 
-The final README and handoff report use the results of a final repeat of these checks rather than assuming earlier output stayed valid.
+The final `main` history remained linear and was updated by fast-forward. HTTPS credential interaction was unavailable during the first publication attempt, so the authenticated SSH remote was used for subsequent pushes.
+
+## Step 4 — Bootstrap a Docker-first Laravel/Vue project
+
+### Instruction block from the master prompt
+
+> Create a Docker architecture with PHP-FPM, Nginx, PostgreSQL and a Node/Vite development service. Make the project runnable by a reviewer who has only Git and Docker. Provide safe environment defaults, health checks, seed data and documented log commands.
+
+### Why I used this step
+
+The employer needs to clone and run the project without reproducing my host setup. Docker also makes the PostgreSQL behavior used by financial constraints and locking consistent between development and review.
+
+### Result
+
+- Bootstrapped Laravel 13 and Vue 3 with Vite.
+- Added `app`, `nginx`, `postgres` and `node` services.
+- Added a PostgreSQL health check and a dedicated PostgreSQL test database.
+- Added safe `.env.example` values and kept `.env`, `vendor` and `node_modules` out of Git.
+- Exposed the application on `http://localhost:8090` because port 8080 was already occupied on the development machine.
+
+### Iterations and corrections
+
+- Excluded unnecessary local/OneDrive content from the Docker build context.
+- Normalized the PHP entrypoint line endings for Windows/Linux compatibility.
+- Ensured Laravel runtime directories are writable inside the container.
+- Verified the built stack through `docker compose ps` and Laravel `/up`.
+
+## Step 5 — Implement Ticket 1 authentication and promo domain
+
+### Instruction block from the master prompt
+
+> Add a minimal Sanctum Bearer-token login. Model the authenticated user as the player, add promo codes and promo claims, seed a demo player and valid, expired and inactive promo codes. Never derive the player from request data.
+
+### Why I used this step
+
+Ticket 1 says the player must come from the authentication token. I made authentication and the promo data model a separate foundation step so the claim endpoint could be built on a real ownership model rather than retrofitting security later.
+
+### Result
+
+- Added login, current-user and logout endpoints.
+- Seeded `demo@example.com` / `password` with a `1000.00 USD` balance.
+- Added `PromoCode`, `PromoClaim` and the `applied`, `rejected`, `revoked` status enum.
+- Seeded `WELCOME10`, `BONUS50`, `OLD100` and `PAUSED25` for the demonstration flow.
+- Added stable money formatting at the API boundary.
+
+## Step 6 — Implement Ticket 1 promo claiming
+
+### Instruction block from the master prompt
+
+> Implement `POST /api/promo/claim`. Validate 6–12 ASCII letters or digits, normalize the code, check existence, active state, expiration and prior successful use, and return the updated balance and credited amount. Record business rejections with distinct codes. Make claim creation and wallet credit atomic and concurrency-safe.
+
+### Why I used this step
+
+I separated transport validation from business validation because they represent different events. Malformed input should return `422`, while a validly formatted but expired or already-used promo is a business attempt that belongs in the audit history.
+
+The transaction, row locks and database uniqueness rule were included because an application-level “check then insert” is insufficient under concurrent requests.
+
+### Result
+
+- Added `ClaimPromoRequest` with the required format validation.
+- Normalized promo codes to uppercase.
+- Added distinct errors for not found, inactive, expired and already used promos.
+- Locked the authenticated player and promo rows inside one transaction.
+- Created the claim and credited the exact server-configured amount atomically.
+- Added a PostgreSQL partial unique index for successful promo consumption.
+- Treated both applied and revoked claims as consumed, while rejected attempts do not consume the promo.
+
+### Iterations and corrections
+
+- Converted PostgreSQL uniqueness conflicts into `PROMO_ALREADY_USED` instead of exposing SQL errors.
+- Confirmed rejected attempts cannot mutate the wallet.
+- Confirmed a revoked promo cannot later be claimed again.
+
+## Step 7 — Implement Ticket 1 history API and Vue flow
+
+### Instruction block from the master prompt
+
+> Implement authenticated, newest-first promo history with pagination and status filtering. Build a Vue claim form with loading, disabled, success and error states. Update the balance and history without reloading the page.
+
+### Why I used this step
+
+I treated the history as an audit view rather than a simple list of successes. This makes rejected business attempts visible and lets the reviewer verify that failed operations did not change the wallet.
+
+Keeping axios calls in service modules also prevents authentication and error handling from being duplicated across presentation components.
+
+### Result
+
+- Added `GET /api/promo/history` with `status`, `page` and bounded `per_page` parameters.
+- Scoped every query to the authenticated user.
+- Returned API Resource data with pagination metadata and `can_revoke`.
+- Added axios authentication/promo service modules.
+- Added claim validation, request loading, disabled actions and backend error messages.
+- Added live balance and history refresh after a successful claim.
+
+### Verification
+
+Tests covered ownership isolation, newest-first ordering, all status filters, invalid filters, real pagination and limiting `per_page` to 50.
+
+## Step 8 — Implement Ticket 2 revoke behavior
+
+### Instruction block from the master prompt
+
+> Implement `PATCH /api/promo/{claimId}/revoke`. Only the claim owner may revoke an applied claim. Deduct the exact original bonus once, reject repeated revocation, reject insufficient balance, and update balance and claim status atomically. Add a confirmation action in the Vue history.
+
+### Why I used this step
+
+Revoke is another financial operation, not just a status update. I explicitly required the original credited amount to be preserved and used for reversal so later promo configuration changes cannot alter the debit.
+
+The insufficient-balance rule was also made explicit: the system must return a conflict and leave both wallet and claim unchanged rather than allowing a negative balance or silently clamping it to zero.
+
+### Result
+
+- Added `RevokePromoAction` and the protected PATCH endpoint.
+- Scoped claim lookup to the authenticated player to prevent IDOR.
+- Locked the player first and claim second inside one transaction.
+- Allowed revocation only from `applied` status.
+- Returned explicit conflicts for already-revoked, non-revocable and insufficient-balance cases.
+- Added a confirmation modal showing the promo code and exact deduction.
+- Updated the balance and history status without a full page reload.
+
+### Verification
+
+Tests covered successful revocation, exact original amount, timestamp/status persistence, repeated revoke, rejected claims, cross-player access and insufficient balance. The second revoke was confirmed not to debit the wallet again.
+
+## Step 9 — Perform a dedicated frontend and browser QA pass
+
+### Instruction block from the master prompt
+
+> Build a polished responsive betting/fintech interface rather than default CRUD. Inspect the running page on desktop and mobile. Review hierarchy, spacing, loading/error states, modal behavior, focus states and long messages. Capture genuine running-application screenshots if browser tooling is available.
+
+### Why I used this step
+
+AI-generated frontend code can be technically functional while still containing layout, state-consistency or accessibility problems. I required a separate visual pass after the features worked so UI quality would be evaluated against the running application, not only by reading Vue templates.
+
+### Result
+
+- Created a responsive dark dashboard with a prominent balance, claim form, status filters and audit history.
+- Verified login, invalid format, expired promo, successful claim, already-used error, filtering, confirmation and revoke.
+- Checked a 390 px viewport and confirmed there was no document-level horizontal overflow.
+- Added mobile history cards and adjusted desktop detail visibility.
+- Cleared stale claim-success feedback after a later revoke changed the balance.
+- Captured the walkthrough in `docs/screenshots/`.
+
+## Step 10 — Run a security and correctness review
+
+### Instruction block from the master prompt
+
+> Search the completed implementation for IDOR, missing authentication, client-controlled money, float arithmetic, negative values, duplicate claim/revoke, missing transactions or locks, uniqueness races, cross-user history, pagination abuse, SQL leakage, token handling and committed secrets. Fix real findings before finalizing.
+
+### Why I used this step
+
+The project is intentionally security-sensitive. I did not want the AI to treat passing happy-path tests as proof that the wallet logic was safe. The dedicated review revisited the implementation from an abuse and concurrency perspective after all features were integrated.
+
+### Result
+
+- Confirmed promo endpoints accept neither player IDs nor monetary values from the client.
+- Confirmed all promo routes require Sanctum and all claim queries are owner-scoped.
+- Confirmed wallet writes use exact integers, transactions, row locks and database constraints.
+- Added rate limits for login and promo mutations.
+- Bounded history pagination and prevented internal money/user fields from leaking through resources.
+- Confirmed `.env` is ignored and no application secret or access token is committed.
+
+### Documented trade-off
+
+For this local technical demonstration, the Vue application stores the Bearer token in `localStorage`. I documented that a production first-party browser deployment should normally prefer an HttpOnly secure cookie/session model after a complete XSS/CSRF threat review.
+
+## Step 11 — Complete the separate Part 2 code review
+
+### Instruction block from the master prompt
+
+> Review the supplied `GET /players/{player}/credit-bonus` backend and axios fragment as a colleague's pull request. For each major issue, explain the problem, risk and recommended fix. Cover HTTP semantics, authentication, IDOR, client-controlled amount, validation, money precision, races, transactions, replay protection, auditability, frontend error states and tests.
+
+### Why I used this step
+
+The second part of the assignment evaluates engineering judgment independently from the application implementation. I asked the AI to produce a concise PR-style review rather than an academic essay, and then checked that every security and financial concern in the supplied snippet was addressed.
+
+### Result
+
+The completed review is in [`CODE_REVIEW.md`](CODE_REVIEW.md). It recommends rejecting the supplied implementation and replacing it with an authenticated server-controlled promo claim flow.
+
+## Step 12 — Final verification and reviewer handoff
+
+### Instruction block from the master prompt
+
+> Run migrations and seed data from scratch, execute the backend tests, PHP formatter check, frontend lint and production build, verify Docker services and health endpoints, inspect Git status and history, and write a README that another developer can follow without additional help.
+
+### Why I used this step
+
+The final response should report evidence, not assumptions. A clean-clone-oriented verification step catches missing environment instructions, stale build output, incorrect ports and uncommitted files before the repository is submitted.
+
+### Final checks performed
+
+```text
+docker compose up -d --build     passed
+php artisan migrate:fresh --seed passed
+php artisan test                 42 passed, 145 assertions (PostgreSQL)
+vendor/bin/pint --test           47 files passed
+npm run lint                     passed
+npm run build                    passed (Vite production build)
+application and /up              HTTP 200
+login / me / logout smoke test   passed
+responsive browser flow          passed
+```
+
+### Deliverables produced
+
+- Runnable Laravel/Vue project in the public Git repository.
+- Real task/step-oriented commit history and published branch milestones.
+- [`README.md`](README.md) with Docker startup, architecture and demo instructions.
+- [`CODE_REVIEW.md`](CODE_REVIEW.md) for Part 2.
+- This AI-assisted development log.
+- Running-application screenshots under [`docs/screenshots/`](docs/screenshots/).
+
+## Summary of how I used AI
+
+I used Codex for repository inspection, scaffolding, implementation, test generation, browser-assisted UI verification, security review and documentation. The master prompt was intentionally detailed because the critical value in this assignment is not raw code generation; it is constraining the AI to produce reviewable, testable and financially safe behavior, then validating the result with real tools and incremental Git history.
