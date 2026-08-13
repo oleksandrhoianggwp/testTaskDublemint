@@ -4,12 +4,29 @@ namespace App\Http\Controllers;
 
 use App\Actions\Promo\ClaimPromoAction;
 use App\Http\Requests\ClaimPromoRequest;
+use App\Http\Requests\PromoHistoryRequest;
 use App\Http\Resources\PromoClaimResource;
 use App\Support\Money;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 
 class PromoController extends Controller
 {
+    public function history(PromoHistoryRequest $request): AnonymousResourceCollection
+    {
+        $claims = $request->user()->promoClaims()
+            ->when(
+                $request->validated('status'),
+                fn ($query, string $status) => $query->where('status', $status),
+            )
+            ->latest('created_at')
+            ->latest('id')
+            ->paginate($request->integer('per_page', 10))
+            ->withQueryString();
+
+        return PromoClaimResource::collection($claims);
+    }
+
     public function claim(ClaimPromoRequest $request, ClaimPromoAction $action): JsonResponse
     {
         $claim = $action->execute($request->user()->id, $request->validated('code'));
