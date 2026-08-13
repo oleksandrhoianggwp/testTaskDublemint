@@ -76,6 +76,12 @@ function formatDate(value) {
   }).format(new Date(value));
 }
 
+function detailsFor(item) {
+  if (item.rejection_reason) return item.rejection_reason;
+  if (item.status === 'revoked') return 'Original bonus deducted from the wallet.';
+  return 'Balance credited successfully.';
+}
+
 function openRevoke(claim) {
   selectedClaim.value = claim;
   revokeError.value = '';
@@ -228,7 +234,7 @@ defineExpose({ refresh: loadHistory });
               <th class="px-6 py-4">
                 Status
               </th>
-              <th class="px-6 py-4">
+              <th class="hidden px-6 py-4 xl:table-cell">
                 Details
               </th>
               <th class="px-6 py-4 text-right">
@@ -260,8 +266,8 @@ defineExpose({ refresh: loadHistory });
                   {{ statusDetails[item.status].label }}
                 </span>
               </td>
-              <td class="max-w-xs px-6 py-4 text-xs leading-5 text-slate-500">
-                {{ item.rejection_reason || 'Balance updated successfully.' }}
+              <td class="hidden max-w-xs px-6 py-4 text-xs leading-5 text-slate-500 xl:table-cell">
+                {{ detailsFor(item) }}
               </td>
               <td class="px-6 py-4 text-right">
                 <button
@@ -307,7 +313,7 @@ defineExpose({ refresh: loadHistory });
           </div>
           <div class="mt-4 flex items-end justify-between gap-4">
             <p class="text-xs leading-5 text-slate-500">
-              {{ item.rejection_reason || 'Balance updated successfully.' }}
+              {{ detailsFor(item) }}
             </p>
             <p class="shrink-0 font-semibold text-slate-200">
               {{ item.amount ? `$${item.amount}` : '—' }}

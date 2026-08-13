@@ -38,6 +38,12 @@ async function submit() {
     submitting.value = false;
   }
 }
+
+function clearFeedback() {
+  feedback.value = null;
+}
+
+defineExpose({ clearFeedback });
 </script>
 
 <template>

@@ -10,9 +10,15 @@ defineProps({
 });
 const emit = defineEmits(['balance-changed', 'logout']);
 const history = ref(null);
+const claimForm = ref(null);
 
 function initials(name) {
   return name.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase();
+}
+
+function handleRevokedBalance(balance) {
+  claimForm.value?.clearFeedback();
+  emit('balance-changed', balance);
 }
 </script>
 
@@ -81,6 +87,7 @@ function initials(name) {
           :currency="user.currency"
         />
         <PromoClaimForm
+          ref="claimForm"
           @claimed="emit('balance-changed', $event)"
           @history-changed="history?.refresh()"
         />
@@ -89,7 +96,7 @@ function initials(name) {
       <div class="mt-5">
         <PromoHistory
           ref="history"
-          @balance-changed="emit('balance-changed', $event)"
+          @balance-changed="handleRevokedBalance"
         />
       </div>
     </div>

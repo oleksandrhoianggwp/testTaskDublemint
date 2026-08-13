@@ -7,3 +7,28 @@
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
 }
+
+@layer base {
+    html {
+        color-scheme: dark;
+        background: #07111f;
+    }
+
+    body {
+        min-width: 320px;
+        min-height: 100vh;
+        background: #07111f;
+        -webkit-font-smoothing: antialiased;
+        text-rendering: optimizeLegibility;
+    }
+
+    button,
+    input {
+        font: inherit;
+    }
+
+    ::selection {
+        color: #07111f;
+        background: #6ee7b7;
+    }
+}
