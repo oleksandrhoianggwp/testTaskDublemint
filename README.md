@@ -2,7 +2,7 @@
 
 A Docker-first Laravel/Vue technical assignment for a betting-platform wallet domain. It implements authenticated promo claiming, auditable filtered history and concurrency-safe bonus revocation, with financial correctness treated as a core requirement rather than a UI afterthought.
 
-![Promo dashboard](docs/screenshots/04-promo-claimed.jpg)
+![Promo dashboard](docs/screenshots/05-promo-claimed.jpg)
 
 ## What is included
 
@@ -237,7 +237,7 @@ docs/screenshots/         # Running-app walkthrough
 
 - [Part 2 code review](CODE_REVIEW.md)
 - [AI-assisted development log](AI_PROMPT_LOG.md)
-- [Running UI screenshots](docs/screenshots/)
+- [Running UI screenshots](docs/screenshots/) — nine full-width landscape demonstration states
 
 Published task branches preserve reviewable milestones:
 
@@ -263,4 +263,4 @@ chore/final-polish-docs
 9. Confirm; show balance back at 1000.00, status `Revoked` and the missing Revoke action.
 10. Optionally call the same revoke endpoint again to demonstrate the `CLAIM_ALREADY_REVOKED` conflict without a second debit.
 
-![Revoke confirmation](docs/screenshots/05-revoke-confirmation.jpg)
+![Revoke confirmation](docs/screenshots/08-revoke-confirmation.jpg)
