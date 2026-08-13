@@ -16,6 +16,11 @@ class AuthTest extends TestCase
             ->assertUnauthorized();
     }
 
+    public function test_unauthenticated_player_cannot_read_promo_history(): void
+    {
+        $this->getJson('/api/promo/history')->assertUnauthorized();
+    }
+
     public function test_valid_login_returns_a_usable_sanctum_token(): void
     {
         $user = User::factory()->create([
