@@ -21,6 +21,11 @@ class AuthTest extends TestCase
         $this->getJson('/api/promo/history')->assertUnauthorized();
     }
 
+    public function test_unauthenticated_player_cannot_revoke_a_promo(): void
+    {
+        $this->patchJson('/api/promo/1/revoke')->assertUnauthorized();
+    }
+
     public function test_valid_login_returns_a_usable_sanctum_token(): void
     {
         $user = User::factory()->create([
