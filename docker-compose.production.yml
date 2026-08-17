@@ -1,0 +1,12 @@
+services:
+  app:
+    environment:
+      APP_ENV: production
+      APP_DEBUG: "false"
+      APP_URL: "${PUBLIC_APP_URL:-http://localhost:8090}"
+      ASSET_URL: "/"
+      TRUSTED_PROXIES: "*"
+
+  node:
+    profiles:
+      - development
