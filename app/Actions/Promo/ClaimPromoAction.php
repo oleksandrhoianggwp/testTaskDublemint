@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\DB;
 
 class ClaimPromoAction
 {
+    private const CLAIM_COOLDOWN_HOURS = 24;
+
     public function execute(int $userId, string $submittedCode): PromoClaim
     {
         $code = strtoupper($submittedCode);
@@ -44,6 +46,24 @@ class ClaimPromoAction
                 }
 
                 $claimedAt = now();
+                $lastSuccessfulClaim = PromoClaim::query()
+                    ->where('user_id', $user->id)
+                    ->whereIn('status', [PromoClaimStatus::Applied->value, PromoClaimStatus::Revoked->value])
+                    ->whereNotNull('claimed_at')
+                    ->latest('claimed_at')
+                    ->latest('id')
+                    ->first(['claimed_at']);
+
+                if ($lastSuccessfulClaim?->claimed_at->gt($claimedAt->copy()->subHours(self::CLAIM_COOLDOWN_HOURS))) {
+                    return $this->reject(
+                        $user,
+                        $promo,
+                        $code,
+                        'PROMO_CLAIM_COOLDOWN',
+                        'A player may receive only one promo bonus within any 24-hour period.',
+                    );
+                }
+
                 $claim = PromoClaim::query()->create([
                     'user_id' => $user->id,
                     'promo_code_id' => $promo->id,

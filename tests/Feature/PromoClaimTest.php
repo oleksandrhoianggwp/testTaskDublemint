@@ -8,6 +8,7 @@ use App\Models\PromoCode;
 use App\Models\User;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Laravel\Sanctum\Sanctum;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -118,6 +119,109 @@ class PromoClaimTest extends TestCase
 
         $this->assertSame($balanceAfterFirstClaim, $user->fresh()->balance_minor);
         $this->assertDatabaseCount('promo_claims', 2);
+    }
+
+    public function test_different_promo_is_rejected_during_24_hour_cooldown(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-18 10:00:00 UTC'), function (): void {
+            $user = $this->authenticatedUser();
+            $firstPromo = PromoCode::factory()->create(['code' => 'PROMOA1']);
+            $secondPromo = PromoCode::factory()->create(['code' => 'PROMOB2']);
+
+            $this->postJson('/api/promo/claim', ['code' => $firstPromo->code])->assertCreated();
+            $balanceAfterFirstClaim = $user->fresh()->balance_minor;
+
+            $this->travel(10)->minutes();
+
+            $this->postJson('/api/promo/claim', ['code' => $secondPromo->code])
+                ->assertConflict()
+                ->assertJsonPath('code', 'PROMO_CLAIM_COOLDOWN');
+
+            $this->assertSame($balanceAfterFirstClaim, $user->fresh()->balance_minor);
+            $this->assertDatabaseHas('promo_claims', [
+                'user_id' => $user->id,
+                'promo_code_id' => $secondPromo->id,
+                'status' => PromoClaimStatus::Rejected->value,
+                'rejection_code' => 'PROMO_CLAIM_COOLDOWN',
+            ]);
+        });
+    }
+
+    public function test_claim_is_rejected_at_23_hours_and_59_minutes(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-18 10:00:00 UTC'), function (): void {
+            $user = $this->authenticatedUser();
+            $firstPromo = PromoCode::factory()->create(['code' => 'PROMOA1']);
+            $secondPromo = PromoCode::factory()->create(['code' => 'PROMOB2']);
+
+            $this->postJson('/api/promo/claim', ['code' => $firstPromo->code])->assertCreated();
+            $balanceAfterFirstClaim = $user->fresh()->balance_minor;
+
+            $this->travel(23)->hours();
+            $this->travel(59)->minutes();
+
+            $this->postJson('/api/promo/claim', ['code' => $secondPromo->code])
+                ->assertConflict()
+                ->assertJsonPath('code', 'PROMO_CLAIM_COOLDOWN');
+
+            $this->assertSame($balanceAfterFirstClaim, $user->fresh()->balance_minor);
+        });
+    }
+
+    public function test_different_promo_may_be_claimed_after_24_hours(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-18 10:00:00 UTC'), function (): void {
+            $user = $this->authenticatedUser();
+            $firstPromo = PromoCode::factory()->create([
+                'code' => 'PROMOA1',
+                'bonus_amount_minor' => 2_500,
+            ]);
+            $secondPromo = PromoCode::factory()->create([
+                'code' => 'PROMOB2',
+                'bonus_amount_minor' => 5_000,
+            ]);
+
+            $this->postJson('/api/promo/claim', ['code' => $firstPromo->code])->assertCreated();
+
+            $this->travel(24)->hours();
+
+            $this->postJson('/api/promo/claim', ['code' => $secondPromo->code])
+                ->assertCreated()
+                ->assertJsonPath('balance', '1075.00')
+                ->assertJsonPath('bonus_amount', '50.00');
+
+            $this->assertSame(107_500, $user->fresh()->balance_minor);
+        });
+    }
+
+    public function test_rejected_attempts_neither_start_nor_reset_cooldown(): void
+    {
+        $this->travelTo(Carbon::parse('2026-08-18 10:00:00 UTC'), function (): void {
+            $user = $this->authenticatedUser();
+            $firstPromo = PromoCode::factory()->create(['code' => 'PROMOA1']);
+            $secondPromo = PromoCode::factory()->create(['code' => 'PROMOB2']);
+            $expiredPromo = PromoCode::factory()->expired()->create(['code' => 'OLD100']);
+
+            $this->postJson('/api/promo/claim', ['code' => 'UNKNOWN1'])
+                ->assertNotFound()
+                ->assertJsonPath('code', 'PROMO_NOT_FOUND');
+
+            $this->postJson('/api/promo/claim', ['code' => $firstPromo->code])->assertCreated();
+
+            $this->travel(23)->hours();
+
+            $this->postJson('/api/promo/claim', ['code' => $expiredPromo->code])
+                ->assertConflict()
+                ->assertJsonPath('code', 'PROMO_EXPIRED');
+
+            $this->travel(1)->hours();
+
+            $this->postJson('/api/promo/claim', ['code' => $secondPromo->code])
+                ->assertCreated()
+                ->assertJsonPath('balance', '1050.00');
+
+            $this->assertSame(105_000, $user->fresh()->balance_minor);
+        });
     }
 
     public function test_revoked_promo_still_counts_as_used(): void
